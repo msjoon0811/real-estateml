@@ -7,25 +7,22 @@
 
 ---
 
-## 프로젝트 개요
+## 📌 프로젝트 개요
 
 ### 문제 정의
 기존 부동산 플랫폼(네이버부동산·직방 등)은 신고된 실거래가를 수동적으로 나열할 뿐, 해당 거래가 실제로 일어난 거래인지(자전거래 여부), 단지 내부에 어떤 운영 리스크가 있는지를 검증할 데이터가 부족합니다. 그 결과 일반 투자자와 실거주자가 거래의 실체적 진위와 객관적 가치를 판단하기 어렵습니다.
 
-### 해결 접근
+### 해결 접근 (Triple Check)
 본 시스템은 세 가지 이종 데이터를 교차 검증해 이상 거래를 판별합니다.
-
-- **수치 이상치**: 실거래가 패턴에서 벗어나는 거래를 Autoencoder 재구성 오차로 탐지
-- **물리적 실체 검증**: 관리비·에너지 사용량으로 "사람이 실제 살고 있는지" 확인
-- **상황적 확증**: 뉴스 텍스트 마이닝으로 가격 변동을 정당화할 호재가 실제 존재하는지 검증
-
-이 세 축을 결합한 **트리플 체크(Triple Check)** 구조가 본 프로젝트의 핵심 차별점입니다.
+1. **수치 이상치**: 실거래가 패턴에서 벗어나는 거래를 `Autoencoder` 재구성 오차로 탐지
+2. **물리적 실체 검증**: K-apt 관리비·에너지 사용량으로 "사람이 실제 살고 있는지" 확인
+3. **상황적 확증**: 네이버 뉴스 텍스트 마이닝(`KoBERT`)으로 가격 변동을 정당화할 호재/악재가 실제 존재하는지 검증
 
 ---
 
-## 시스템 아키텍처
+## 🏗 시스템 아키텍처
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │ 1. Data Source (실시간 API 수집)                              │
 │    국토부 실거래가 │ K-apt 관리비/에너지 │ 네이버 뉴스          │
@@ -56,102 +53,137 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 모델 구성 (Triple Model Engine)
+---
 
-| 모델 | 알고리즘 | 역할 |
-|------|----------|------|
-| Peer Group Clusterer | K-Means / KNN | 지리·세대수·준공연도 기반 또래 단지 군집화 |
-| Anomaly Detection Engine | Autoencoder | 정상 거래 패턴 학습 및 재구성 오차 기반 이상치 판별 |
-| Contextual Weighting Engine | KoBERT | 뉴스 감성 분석으로 시장 상황 가중치 산출 |
-| XAI & Reasoning Engine | SHAP | 변수별 기여도 정량화 및 판정 근거 생성 |
+## 🛠 상세 기술 스택
+
+| 분류 | 기술명 | 사용 목적 (어디에 쓰이는가?) |
+|------|--------|--------------------------|
+| **Language** | Python 3.10+ | 데이터 수집, 모델링, 백엔드 개발 전반 |
+| **Data Collection** | `requests`, `BeautifulSoup` | 국토부/K-apt API 통신 및 뉴스 크롤링 |
+| **Data Pipeline** | n8n, `pandas` | 스케줄링된 자동 데이터 수집 워크플로우 구축 및 데이터프레임 전처리 |
+| **Machine Learning** | `scikit-learn` | 아파트 단지 군집화(K-Means, KNN) 및 피처 스케일링 |
+| **Deep Learning** | PyTorch, `Autoencoder` | 정상 거래 패턴을 학습하고, 재구성 오차가 큰 데이터를 이상 거래로 탐지 |
+| **NLP** | `transformers` (KoBERT) | 네이버 부동산 뉴스 텍스트를 분석하여 시장의 긍정/부정 센티먼트 추출 |
+| **XAI (설명가능AI)** | `SHAP` | "왜 이 매물이 저평가/이상거래 인가?"에 대한 변수별 기여도 점수 시각화 |
+| **Backend / API** | FastAPI, `uvicorn` | 모델 추론 결과를 웹이나 텔레그램에 JSON 형태로 제공하는 엔드포인트 |
+| **Notification** | `python-telegram-bot` | 이상 거래 탐지 시 사용자에게 실시간 알림 발송 |
 
 ---
 
-## 기술 스택
+## 📂 디렉토리 구조 및 용도
 
-- **Language**: Python 3.10+
-- **ML/DL**: PyTorch, scikit-learn, XGBoost, Transformers (KoBERT), SHAP
-- **Data Pipeline**: n8n, Pandas
-- **Backend**: FastAPI
-- **Notification**: Telegram Bot API
-- **Data Source API**: 국토부 공공데이터포털, K-apt, 네이버 뉴스 API
-
----
-
-## 디렉토리 구조 (제안)
-
-```
+```text
 real-estate-ml/
-├── data/                      # 원본 및 가공 데이터 (gitignore)
-│   ├── raw/
-│   ├── processed/
-│   └── external/
-├── notebooks/                 # 실험·EDA용 Jupyter 노트북
-├── src/
-│   ├── data/                  # 데이터 수집·전처리 모듈
-│   │   ├── molit_api.py       # 국토부 실거래가
-│   │   ├── kapt_api.py        # K-apt 관리비
-│   │   └── news_crawler.py    # 뉴스 수집
-│   ├── features/              # 피처 엔지니어링
-│   ├── models/
-│   │   ├── peer_group.py      # K-Means / KNN 군집화
-│   │   ├── autoencoder.py     # 이상치 탐지
-│   │   ├── kobert_sentiment.py # 뉴스 감성 분석
-│   │   └── shap_explainer.py  # XAI
-│   ├── reasoning/             # 트리플 체크 로직
-│   ├── api/                   # FastAPI 엔드포인트
-│   └── utils/
-├── tests/
-├── configs/                   # 모델·파이프라인 설정
-├── reports/                   # 분석 리포트·시각화 결과물
-├── .env.example
-├── .gitignore
-├── requirements.txt
-├── README.md
-└── LICENSE
+├── data/                      # ⚠️ .gitignore 포함 (절대 커밋 금지)
+│   ├── raw/                   # API로 수집한 원본 JSON/CSV 파일
+│   ├── processed/             # 전처리 및 병합이 완료된 데이터셋
+│   └── external/              # 통계청, 한국은행 등 외부 참고 데이터
+├── docs/                      # 프로젝트 관련 문서 모음
+├── src/                       # 핵심 소스 코드 (이곳에서 주로 작업합니다!)
+│   ├── data/                  # 데이터 수집 모듈 (API 연동 코드)
+│   ├── features/              # 데이터 전처리 및 피처 엔지니어링 모듈
+│   ├── models/                # AI/ML 모델 정의 및 학습 코드
+│   ├── reasoning/             # XAI 기반 트리플 체크 종합 판정 로직
+│   ├── api/                   # FastAPI 라우터 및 엔드포인트
+│   └── utils/                 # 로깅, 설정 등 공통 유틸리티
+├── configs/                   # 모델 하이퍼파라미터 등 설정 파일 (.yaml, .json)
+├── reports/                   # 모델 평가 지표 및 분석 결과 시각화 이미지
+├── GIT_GUIDE.md               # 🌟 팀원용 Git/GitHub 사용 설명서
+├── .env.example               # 환경 변수 템플릿 파일
+├── .gitignore                 # Git에서 제외할 파일 목록
+├── requirements.txt           # Python 패키지 의존성 목록
+└── README.md                  # 본 문서
 ```
 
 ---
 
-## 시작하기
+## 👨‍💻 역할 분담 및 상세 작업 가이드 (팀원별 Action Item)
 
-### 1. 저장소 클론
-```bash
-git clone https://github.com/msjoon0811/real-estate-ml.git
-cd real-estate-ml
-```
+> 각 팀원은 아래 명시된 **[작업 위치]**의 파일들을 담당하여 코드를 작성합니다. **작업 전 반드시 `GIT_GUIDE.md`를 읽고 본인의 브랜치를 생성하세요!**
 
-### 2. 가상 환경 설정
+### 👑 1. 문승준 (팀 리드)
+**[담당 업무]**
+- 전체 프로젝트 아키텍처 설계, Git 환경 및 PR 리뷰 관리
+- n8n 기반 ETL 파이프라인 자동화 구축
+- **Autoencoder 모델 설계 및 학습 (이상치 탐지 핵심 로직)**
+
+**[어떻게 작업하는가?]**
+1. **인프라 관리**: GitHub Repository 관리 및 팀원들의 Pull Request 리뷰/머지.
+2. **ETL 파이프라인**: n8n을 활용하여 안우현 팀원이 만든 API 수집 모듈을 주기적으로 실행시키고, 데이터를 병합해 `data/processed/`에 적재하는 플로우 작성.
+3. **Autoencoder 모델 (`src/models/autoencoder.py`)**: 
+   - PyTorch를 사용하여 실거래가+관리비 데이터를 인코딩/디코딩하는 신경망 구현.
+   - 정상 데이터를 학습한 뒤, 새로운 입력값이 들어왔을 때 재구성 오차(Reconstruction Error)가 특정 임계치를 넘으면 '이상치'로 반환하는 로직 작성.
+
+---
+
+### 🧠 2. 손종인
+**[담당 업무]**
+- 네이버 부동산 뉴스 텍스트 감성 분석 모델링 (KoBERT)
+- XAI (SHAP) 기반 이상 거래 근거 생성 및 시각화
+
+**[어떻게 작업하는가?]**
+1. **KoBERT 감성 분석 (`src/models/kobert_sentiment.py`)**:
+   - HuggingFace `transformers`에서 `skt/kobert-base-v1` 모델 로드.
+   - 뉴스 텍스트(제목/본문)를 입력받아 [호재(긍정) / 악재(부정) / 중립]을 확률값으로 출력하는 파인튜닝 스크립트 작성 및 추론 함수 구현.
+2. **XAI 로직 (`src/models/shap_explainer.py`)**:
+   - 승준 팀장이 만든 Autoencoder 결과물을 받아, `shap` 라이브러리를 통해 "어떤 변수(ex: 전기세 급감, 최근 거래가 폭락 등) 때문에 이상 거래로 판정되었는지" 기여도(Feature Importance)를 수치 및 그래프로 뽑아내는 함수 작성.
+
+---
+
+### 🌐 3. 안우현
+**[담당 업무]**
+- 공공데이터/포털 API 수집 모듈 개발
+- 군집화(Peer Group) 로직 구현
+- FastAPI 백엔드 및 텔레그램 연동 구현
+
+**[어떻게 작업하는가?]**
+1. **데이터 수집 (`src/data/molit_api.py`, `kapt_api.py`, `news_crawler.py`)**:
+   - `requests`를 사용해 국토부 실거래가 API, K-apt 관리비 API를 호출하고 DataFrame으로 변환하는 함수 작성.
+   - 네이버 뉴스 검색 API를 연동하여 특정 아파트 단지 관련 뉴스를 크롤링.
+2. **군집화 모델 (`src/models/peer_group.py`)**:
+   - `scikit-learn`의 KMeans/KNN을 사용해 아파트의 지리적 위치, 세대수, 준공연도를 기준으로 성격이 비슷한 '또래 단지'로 묶어주는 함수 작성.
+3. **서비스 인터페이스 (`src/api/main.py` 및 알림 모듈)**:
+   - FastAPI를 띄워, 분석된 결과를 프론트엔드가 사용할 수 있게 JSON으로 내려주는 REST API 구현.
+   - 이상 거래가 탐지되면 `python-telegram-bot`을 통해 관리자 텔레그램으로 알림을 보내는 모듈 개발.
+
+---
+
+## 🔄 개발 및 협업 프로세스 (Workflow)
+
+프로젝트 코드가 꼬이지 않도록 아래 절차에 따라 개발합니다. 자세한 Git 명령어는 `GIT_GUIDE.md`를 참고하세요.
+
+1. **로컬 최신화**: 매일 작업 전 `develop` 브랜치로 이동 후 `git pull origin develop` 실행.
+2. **브랜치 생성**: 본인의 할 일에 맞춰 새 브랜치 생성 (예: `feature/woohyun-api-crawler`).
+3. **코드 작성 및 테스트**: 담당한 `src/` 하위의 파이썬 파일을 작성하고 로컬에서 테스트.
+4. **Commit & Push**: 작은 단위로 자주 커밋(`feat: 국토부 API 수집 함수 추가` 등)하고 GitHub에 푸시.
+5. **Pull Request (PR)**: GitHub 사이트에서 `develop` 브랜치로 PR 생성.
+6. **코드 리뷰 (팀장)**: 문승준 팀장이 코드를 확인한 후 충돌이 없으면 `develop` 브랜치에 병합(Merge).
+
+---
+
+## 🚀 로컬 실행 방법 (시작하기)
+
+### 1. 환경 준비
 ```bash
+# 1. 저장소 클론
+git clone https://github.com/msjoon0811/real-estateml.git
+cd real-estateml
+
+# 2. 가상 환경 설정 및 패키지 설치
 python -m venv .venv
-source .venv/bin/activate    # Windows: .venv\Scripts\activate
+source .venv/bin/activate    # Windows의 경우: .venv\Scripts\activate
 pip install -r requirements.txt
-```
 
-### 3. 환경 변수 설정
-`.env.example` 파일을 복사해 `.env`로 만들고 본인의 API 키를 채워넣습니다.
-
-```bash
+# 3. 환경 변수 설정 (본인 API 키 입력)
 cp .env.example .env
 ```
 
-```env
-# .env (절대 커밋 금지)
-MOLIT_API_KEY=your_key_here
-KAPT_API_KEY=your_key_here
-NAVER_CLIENT_ID=your_id_here
-NAVER_CLIENT_SECRET=your_secret_here
-TELEGRAM_BOT_TOKEN=your_token_here
-ANTHROPIC_API_KEY=your_key_here
-```
-
-### 4. 실행
+### 2. 코드 실행 예시
+*(추후 코드가 완성됨에 따라 구체적인 실행 명령어가 업데이트 될 예정입니다.)*
 ```bash
-# 데이터 수집
+# 데이터 수집 실행
 python -m src.data.molit_api --region 서울 --period 202601
-
-# 모델 학습
-python -m src.models.autoencoder --config configs/autoencoder.yaml
 
 # API 서버 기동
 uvicorn src.api.main:app --reload
@@ -159,132 +191,35 @@ uvicorn src.api.main:app --reload
 
 ---
 
-## 협업 규칙
-
-### 브랜치 전략 (Git Flow 간소화 버전)
-- `main`: 배포 가능한 안정 버전. 직접 푸시 금지, PR을 통해서만 머지
-- `develop`: 개발 통합 브랜치. 기능이 완성되면 여기로 머지
-- `feature/{이슈번호}-{간단한-설명}`: 개별 기능 개발 (예: `feature/12-autoencoder-training`)
-- `fix/{이슈번호}-{간단한-설명}`: 버그 수정
-- `docs/{설명}`: 문서 작업
-
-### 커밋 메시지 컨벤션
-[Conventional Commits](https://www.conventionalcommits.org/) 형식을 따릅니다.
-
-```
-<type>: <subject>
-
-<body (선택)>
-```
-
-| Type | 용도 |
-|------|------|
-| `feat` | 새로운 기능 추가 |
-| `fix` | 버그 수정 |
-| `docs` | 문서 수정 |
-| `style` | 코드 포맷팅, 세미콜론 등 (로직 변경 X) |
-| `refactor` | 코드 리팩토링 |
-| `test` | 테스트 코드 추가·수정 |
-| `chore` | 빌드·패키지 설정 등 기타 |
-| `data` | 데이터 파이프라인·전처리 관련 |
-| `model` | 모델 학습·튜닝 관련 |
-
-예시:
-```
-feat: Autoencoder 재구성 오차 임계값 동적 산출 로직 추가
-fix: K-apt API 응답에서 단지코드 누락 시 KeyError 처리
-model: KoBERT 파인튜닝 epoch 5→10 조정
-```
-
-### Pull Request 규칙
-- PR 제목은 커밋 컨벤션과 동일하게 작성
-- 본문에 **무엇을·왜·어떻게** 변경했는지 기재
-- 최소 1명 이상의 리뷰 승인 후 머지
-- 머지는 가급적 **Squash and Merge** 사용
-
-### 코드 스타일
-- Python: [PEP 8](https://peps.python.org/pep-0008/) 준수
-- 포매터: `black`, 린터: `ruff`
-- 함수·클래스에는 docstring 작성 (Google 스타일)
-- 모든 머신러닝 실험은 노트북이 아닌 **재현 가능한 스크립트**로 작성
-
-### 이슈 관리
-- 작업 시작 전 GitHub Issues에 등록
-- 라벨: `data`, `model`, `api`, `bug`, `docs`, `discussion`
-- 마일스톤 단위로 진행 상황 추적
-
----
-
-## 역할 분담 (초안)
-
-| 이름 | 학번 | 주요 담당 |
-|------|------|-----------|
-| 문승준 | 2022243031 | 팀 리드, Autoencoder·이상치 탐지, ETL 파이프라인 |
-| 손종인 | 2022380043 | KoBERT 뉴스 감성 분석, XAI(SHAP) |
-| 안우현 | 2022243007 | 데이터 수집(API), Peer Group 군집화, 서비스 인터페이스 |
-
-> 역할은 진행 상황에 따라 유연하게 조정합니다. 매주 정기 미팅에서 재배분 여부를 점검합니다.
-
----
-
-## 일정 (마일스톤)
+## 🗓 일정 (마일스톤)
 
 | 기간 | 마일스톤 | 산출물 |
 |------|----------|--------|
-| 3월 | 데이터 수집·EDA, 단지 코드 기준 통합 테이블 구축 | 통합 데이터셋 v1, EDA 리포트 |
-| 4월 | Peer Group 군집화 + Autoencoder 베이스라인 | 이상치 탐지 모델 v1 |
-| 5월 | KoBERT 감성 분석 + SHAP 통합, FastAPI 인터페이스 | 트리플 체크 통합 모델 |
-| 6월 | 대시보드·텔레그램 알림 완성, 발표 자료 정리 | 최종 시스템, 학술발표 자료 |
+| **3월** | 데이터 수집 모듈 개발, 단지 코드 기준 통합 테이블 구축 | 통합 데이터셋 v1, EDA 리포트 |
+| **4월** | Peer Group 군집화 + Autoencoder 베이스라인 구축 | 이상치 탐지 모델 v1 |
+| **5월** | KoBERT 감성 분석 + SHAP 통합, FastAPI 인터페이스 개발 | 트리플 체크 통합 모델 |
+| **6월** | 웹 대시보드·텔레그램 알림 완성, 최종 문서 정리 | 최종 시스템, 학술발표 자료 |
 
-연구 기간: **2026. 3. 3. ~ 2026. 6. 19.**
+> **전체 연구 기간**: 2026. 3. 3. ~ 2026. 6. 19.
 
 ---
 
-## 보안 주의사항
+## 🛡 보안 주의사항 (필독)
 
-다음 항목은 **절대로** 코드·문서·이슈·커밋 메시지에 포함하지 마세요.
-
+다음 항목은 **절대로** 커밋에 포함시키지 마세요.
 - API 키 (국토부, K-apt, 네이버, Anthropic 등)
-- GitHub Personal Access Token
-- 텔레그램 봇 토큰
-- 개인 연락처·주민번호 등 식별 정보
-- `.env` 파일 자체
+- `.env` 파일 자체 (`.gitignore`에 등록되어 있어 기본적으로는 올라가지 않습니다.)
+- 원본 데이터 파일 (용량이 크므로 `data/` 폴더 안의 파일은 커밋하지 않습니다.)
 
-`.gitignore`에 다음 항목이 포함되어 있는지 확인하세요.
-
-```gitignore
-.env
-.env.*
-!.env.example
-*.key
-*.pem
-data/raw/
-data/processed/
-__pycache__/
-.venv/
-.ipynb_checkpoints/
-```
-
-만약 실수로 시크릿을 커밋했다면, 단순 삭제로는 부족합니다. 즉시 해당 토큰·키를 **폐기(revoke)** 하고 새로 발급받아야 합니다. 필요시 `git filter-repo`로 히스토리에서 완전히 제거합니다.
+> 만약 실수로 API 키를 커밋했다면, 즉시 키를 폐기(revoke)하고 팀장에게 알려주세요!
 
 ---
 
-## 참고문헌
+## 📞 팀 연락망
 
-- 국토교통부, 아파트매매 실거래 상세 자료, 공공데이터포털, https://www.data.go.kr
-- 통계청, 장래인구추계, https://kosis.kr
-- 한국은행, 경제통계시스템(ECOS) 기준금리, https://ecos.bok.or.kr
-- K-apt 공동주택관리정보시스템, https://www.k-apt.go.kr
-
----
-
-## 팀
-
-| 역할 | 이름 | 연락 |
+| 역할 | 이름 | 담당 및 연락처 |
 |------|------|------|
-| 지도교수 | 이성철 교수님 | sungchul@sunmoon.ac.kr |
-| 팀 리드 | 문승준 | msjoon0811@naver.com |
-| 팀원 | 손종인 | sonjong9720@gmail.com |
-| 팀원 | 안우현 | 0215woo@naver.com |
-
-선문대학교 컴퓨터공학부 · SW중심대학사업단
+| **지도교수** | 이성철 교수님 | sungchul@sunmoon.ac.kr |
+| **팀 리드** | 문승준 | 전체 설계, Autoencoder (msjoon0811@naver.com) |
+| **팀원** | 손종인 | KoBERT, SHAP XAI (sonjong9720@gmail.com) |
+| **팀원** | 안우현 | API 크롤러, 군집화, 백엔드 (0215woo@naver.com) |
