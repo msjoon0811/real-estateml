@@ -24,12 +24,12 @@
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. Data Source (실시간 API 수집)                              │
+│ 1. Data Source (API 수집)                                     │
 │    국토부 실거래가 │ K-apt 관리비/에너지 │ 네이버 뉴스          │
 └────────────────────────────┬────────────────────────────────┘
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 2. ETL Pipeline (n8n 기반 전처리·통합)                        │
+│ 2. ETL Pipeline (Python/Pandas 기반 전처리·통합)              │
 │    단지 코드 기준 데이터프레임 통합                              │
 └────────────────────────────┬────────────────────────────────┘
                              ▼
@@ -49,7 +49,7 @@
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ 5. Service Interface (FastAPI)                              │
-│    웹 대시보드 (분석 리포트) │ 텔레그램 (실시간 알림)             │
+│    웹 대시보드 (분석 리포트) │ 텔레그램 (알림)                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -61,7 +61,7 @@
 |------|--------|--------------------------|
 | **Language** | Python 3.10+ | 데이터 수집, 모델링, 백엔드 개발 전반 |
 | **Data Collection** | `requests`, `BeautifulSoup` | 국토부/K-apt API 통신 및 뉴스 크롤링 |
-| **Data Pipeline** | n8n, `pandas` | 스케줄링된 자동 데이터 수집 워크플로우 구축 및 데이터프레임 전처리 |
+| **Data Pipeline** | `pandas` | 데이터 수집 및 병합을 위한 Python 스크립트 작성 및 데이터프레임 전처리 |
 | **Machine Learning** | `scikit-learn` | 아파트 단지 군집화(K-Means, KNN) 및 피처 스케일링 |
 | **Deep Learning** | PyTorch, `Autoencoder` | 정상 거래 패턴을 학습하고, 재구성 오차가 큰 데이터를 이상 거래로 탐지 |
 | **NLP** | `transformers` (KoBERT) | 네이버 부동산 뉴스 텍스트를 분석하여 시장의 긍정/부정 센티먼트 추출 |
@@ -105,33 +105,19 @@ real-estate-ml/
 ### 👑 1. 문승준 (팀 리드)
 **[담당 업무]**
 - 전체 프로젝트 아키텍처 설계, Git 환경 및 PR 리뷰 관리
-- n8n 기반 ETL 파이프라인 자동화 구축
+- Python/Pandas 기반 ETL 데이터 파이프라인 구축
 - **Autoencoder 모델 설계 및 학습 (이상치 탐지 핵심 로직)**
 
 **[어떻게 작업하는가?]**
 1. **인프라 관리**: GitHub Repository 관리 및 팀원들의 Pull Request 리뷰/머지.
-2. **ETL 파이프라인**: n8n을 활용하여 안우현 팀원이 만든 API 수집 모듈을 주기적으로 실행시키고, 데이터를 병합해 `data/processed/`에 적재하는 플로우 작성.
+2. **ETL 파이프라인**: 종인 팀원이 만든 API 수집 모듈을 실행시키고, Pandas를 활용해 수집된 데이터를 병합하여 `data/processed/`에 적재하는 파이썬 스크립트 작성.
 3. **Autoencoder 모델 (`src/models/autoencoder.py`)**: 
    - PyTorch를 사용하여 실거래가+관리비 데이터를 인코딩/디코딩하는 신경망 구현.
    - 정상 데이터를 학습한 뒤, 새로운 입력값이 들어왔을 때 재구성 오차(Reconstruction Error)가 특정 임계치를 넘으면 '이상치'로 반환하는 로직 작성.
 
 ---
 
-### 🧠 2. 손종인
-**[담당 업무]**
-- 네이버 부동산 뉴스 텍스트 감성 분석 모델링 (KoBERT)
-- XAI (SHAP) 기반 이상 거래 근거 생성 및 시각화
-
-**[어떻게 작업하는가?]**
-1. **KoBERT 감성 분석 (`src/models/kobert_sentiment.py`)**:
-   - HuggingFace `transformers`에서 `skt/kobert-base-v1` 모델 로드.
-   - 뉴스 텍스트(제목/본문)를 입력받아 [호재(긍정) / 악재(부정) / 중립]을 확률값으로 출력하는 파인튜닝 스크립트 작성 및 추론 함수 구현.
-2. **XAI 로직 (`src/models/shap_explainer.py`)**:
-   - 승준 팀장이 만든 Autoencoder 결과물을 받아, `shap` 라이브러리를 통해 "어떤 변수(ex: 전기세 급감, 최근 거래가 폭락 등) 때문에 이상 거래로 판정되었는지" 기여도(Feature Importance)를 수치 및 그래프로 뽑아내는 함수 작성.
-
----
-
-### 🌐 3. 안우현
+### 🌐 2. 손종인
 **[담당 업무]**
 - 공공데이터/포털 API 수집 모듈 개발
 - 군집화(Peer Group) 로직 구현
@@ -149,12 +135,26 @@ real-estate-ml/
 
 ---
 
+### 🧠 3. 안우현
+**[담당 업무]**
+- 네이버 부동산 뉴스 텍스트 감성 분석 모델링 (KoBERT)
+- XAI (SHAP) 기반 이상 거래 근거 생성 및 시각화
+
+**[어떻게 작업하는가?]**
+1. **KoBERT 감성 분석 (`src/models/kobert_sentiment.py`)**:
+   - HuggingFace `transformers`에서 `skt/kobert-base-v1` 모델 로드.
+   - 뉴스 텍스트(제목/본문)를 입력받아 [호재(긍정) / 악재(부정) / 중립]을 확률값으로 출력하는 파인튜닝 스크립트 작성 및 추론 함수 구현.
+2. **XAI 로직 (`src/models/shap_explainer.py`)**:
+   - 승준 팀장이 만든 Autoencoder 결과물을 받아, `shap` 라이브러리를 통해 "어떤 변수(ex: 전기세 급감, 최근 거래가 폭락 등) 때문에 이상 거래로 판정되었는지" 기여도(Feature Importance)를 수치 및 그래프로 뽑아내는 함수 작성.
+
+---
+
 ## 🔄 개발 및 협업 프로세스 (Workflow)
 
 프로젝트 코드가 꼬이지 않도록 아래 절차에 따라 개발합니다. 자세한 Git 명령어는 `GIT_GUIDE.md`를 참고하세요.
 
 1. **로컬 최신화**: 매일 작업 전 `develop` 브랜치로 이동 후 `git pull origin develop` 실행.
-2. **브랜치 생성**: 본인의 할 일에 맞춰 새 브랜치 생성 (예: `feature/woohyun-api-crawler`).
+2. **브랜치 생성**: 본인의 할 일에 맞춰 새 브랜치 생성 (예: `feature/woohyun-kobert`).
 3. **코드 작성 및 테스트**: 담당한 `src/` 하위의 파이썬 파일을 작성하고 로컬에서 테스트.
 4. **Commit & Push**: 작은 단위로 자주 커밋(`feat: 국토부 API 수집 함수 추가` 등)하고 GitHub에 푸시.
 5. **Pull Request (PR)**: GitHub 사이트에서 `develop` 브랜치로 PR 생성.
@@ -220,6 +220,6 @@ uvicorn src.api.main:app --reload
 | 역할 | 이름 | 담당 및 연락처 |
 |------|------|------|
 | **지도교수** | 이성철 교수님 | sungchul@sunmoon.ac.kr |
-| **팀 리드** | 문승준 | 전체 설계, Autoencoder (msjoon0811@naver.com) |
-| **팀원** | 손종인 | KoBERT, SHAP XAI (sonjong9720@gmail.com) |
-| **팀원** | 안우현 | API 크롤러, 군집화, 백엔드 (0215woo@naver.com) |
+| **팀 리드** | 문승준 | 설계, ETL(Pandas), Autoencoder (msjoon0811@naver.com) |
+| **팀원** | 손종인 | API 데이터 수집, 군집화, 백엔드 (sonjong9720@gmail.com) |
+| **팀원** | 안우현 | KoBERT 모델링, SHAP XAI (0215woo@naver.com) |
