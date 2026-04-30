@@ -20,12 +20,15 @@
 
 ---
 
-## 🏗 시스템 아키텍처
+## 🏗 시스템 아키텍처 및 데이터 전략
+
+본 프로젝트는 실무 ML 아키텍처를 따라 **학습용 과거 데이터(Batch)**와 **추론용 실시간 데이터(Streaming)**를 분리한 투트랙(Two-Track) 전략을 사용합니다. 상세 내용은 [`docs/DATA_STRATEGY.md`](docs/DATA_STRATEGY.md)를 참고하세요.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. Data Source (API 수집)                                     │
-│    국토부 실거래가 │ K-apt 관리비/에너지 │ 네이버 뉴스          │
+│ 1. Data Source (Two-Track 분리 수집)                          │
+│   [학습용 Baseline] 과거 3~5년치 CSV 덤프 다운로드               │
+│   [추론용 Live] 당월 실거래가/관리비/뉴스 API 실시간 호출         │
 └────────────────────────────┬────────────────────────────────┘
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -60,14 +63,14 @@
 | 분류 | 기술명 | 사용 목적 (어디에 쓰이는가?) |
 |------|--------|--------------------------|
 | **Language** | Python 3.10+ | 데이터 수집, 모델링, 백엔드 개발 전반 |
-| **Data Collection** | `requests`, `BeautifulSoup` | 국토부/K-apt API 통신 및 뉴스 크롤링 |
-| **Data Pipeline** | n8n, `pandas` | n8n을 통한 데이터 수집 자동화 및 알림 워크플로우 구축, Pandas를 통한 데이터프레임 전처리 |
+| **Data Collection** | `requests`, `BeautifulSoup` | 당월 최신 데이터 모니터링을 위한 국토부/K-apt API 통신 및 뉴스 크롤링 |
+| **Data Pipeline** | n8n, `pandas` | 과거 5년치 CSV 병합(Pandas) 및 실시간 API 수집 스케줄링(n8n) 워크플로우 구축 |
 | **Machine Learning** | `scikit-learn` | 아파트 단지 군집화(K-Means, KNN) 및 피처 스케일링 |
 | **Deep Learning** | PyTorch, `Autoencoder` | 정상 거래 패턴을 학습하고, 재구성 오차가 큰 데이터를 이상 거래로 탐지 |
 | **NLP** | `transformers` (KoBERT) | 네이버 부동산 뉴스 텍스트를 분석하여 시장의 긍정/부정 센티먼트 추출 |
 | **XAI (설명가능AI)** | `SHAP` | "왜 이 매물이 저평가/이상거래 인가?"에 대한 변수별 기여도 점수 시각화 |
 | **Backend / API** | FastAPI, `uvicorn` | 모델 추론 결과를 웹이나 텔레그램에 JSON 형태로 제공하는 엔드포인트 |
-| **Notification** | `python-telegram-bot` | 이상 거래 탐지 시 사용자에게 실시간 알림 발송 |
+| **Notification** | `python-telegram-bot` | 이상 거래 탐지 시 사용자에게 실시간 텔레그램 경고 발송 |
 
 ---
 
@@ -76,12 +79,12 @@
 ```text
 real-estate-ml/
 ├── data/                      # ⚠️ .gitignore 포함 (절대 커밋 금지)
-│   ├── raw/                   # API로 수집한 원본 JSON/CSV 파일
+│   ├── raw/                   # API 수집 JSON 및 3~5년치 CSV 원본 파일
 │   ├── processed/             # 전처리 및 병합이 완료된 데이터셋
 │   └── external/              # 통계청, 한국은행 등 외부 참고 데이터
-├── docs/                      # 프로젝트 관련 문서 모음
+├── docs/                      # 프로젝트 관련 문서 모음 (DATA_STRATEGY 등)
 ├── src/                       # 핵심 소스 코드 (이곳에서 주로 작업합니다!)
-│   ├── data/                  # 데이터 수집 모듈 (API 연동 코드)
+│   ├── data/                  # 데이터 수집 모듈 (당월 API 연동 코드)
 │   ├── features/              # 데이터 전처리 및 피처 엔지니어링 모듈
 │   ├── models/                # AI/ML 모델 정의 및 학습 코드
 │   ├── reasoning/             # XAI 기반 트리플 체크 종합 판정 로직
@@ -104,34 +107,33 @@ real-estate-ml/
 
 ### 👑 1. 문승준 (팀 리드)
 **[담당 업무]**
-- 전체 프로젝트 아키텍처 설계, Git 환경 및 PR 리뷰 관리
-- n8n 기반 ETL 데이터 파이프라인 자동화 구축
+- 전체 아키텍처 설계 및 Git 환경 관리
+- n8n 스케줄러 기반 실시간 파이프라인 + Pandas 기반 대용량 CSV 파이프라인 구축
 - **Autoencoder 모델 설계 및 학습 (이상치 탐지 핵심 로직)**
 
 **[어떻게 작업하는가?]**
-1. **인프라 관리**: GitHub Repository 관리 및 팀원들의 Pull Request 리뷰/머지.
-2. **ETL 파이프라인**: 로컬 환경에 n8n을 구성하여 종인 팀원이 만든 API 수집 모듈을 스케줄링(주기적 실행)하고, 결과를 텔레그램 알림으로 발송하는 자동화 플로우 작성.
-3. **Autoencoder 모델 (`src/models/autoencoder.py`)**: 
+1. **데이터 파이프라인**: 
+   - 3~5년치 다운로드된 CSV 파일들을 Pandas로 병합하여 모델 학습용 베이스라인 데이터셋(`data/processed/`) 생성.
+   - 로컬 환경에 n8n을 구성하여 종인 팀원이 만든 당월 API 수집 모듈을 스케줄링하고 텔레그램과 연동.
+2. **Autoencoder 모델 (`src/models/autoencoder.py`)**: 
    - PyTorch를 사용하여 실거래가+관리비 데이터를 인코딩/디코딩하는 신경망 구현.
-   - 정상 데이터를 학습한 뒤, 새로운 입력값이 들어왔을 때 재구성 오차(Reconstruction Error)가 특정 임계치를 넘으면 '이상치'로 반환하는 로직 작성.
+   - 정상 데이터를 학습한 뒤, 새로운 입력값이 들어왔을 때 재구성 오차(Reconstruction Error)가 특정 임계치를 넘으면 '이상치'로 반환.
 
 ---
 
 ### 🌐 2. 손종인
 **[담당 업무]**
-- 공공데이터/포털 API 수집 모듈 개발
+- 당월(실시간) 공공데이터/포털 API 수집 모듈 개발
 - 군집화(Peer Group) 로직 구현
 - FastAPI 백엔드 및 텔레그램 연동 구현
 
 **[어떻게 작업하는가?]**
 1. **데이터 수집 (`src/data/molit_api.py`, `kapt_api.py`, `news_crawler.py`)**:
-   - `requests`를 사용해 국토부 실거래가 API, K-apt 관리비 API를 호출하고 DataFrame으로 변환하는 함수 작성.
-   - 네이버 뉴스 검색 API를 연동하여 특정 아파트 단지 관련 뉴스를 크롤링.
+   - `requests`를 사용해 국토부 실거래가, K-apt, 뉴스를 호출하되 **파라미터를 '당월(최근 1개월)'로 고정**하여 실시간 모니터링용 스크립트 작성.
 2. **군집화 모델 (`src/models/peer_group.py`)**:
    - `scikit-learn`의 KMeans/KNN을 사용해 아파트의 지리적 위치, 세대수, 준공연도를 기준으로 성격이 비슷한 '또래 단지'로 묶어주는 함수 작성.
 3. **서비스 인터페이스 (`src/api/main.py` 및 알림 모듈)**:
-   - FastAPI를 띄워, 분석된 결과를 프론트엔드가 사용할 수 있게 JSON으로 내려주는 REST API 구현.
-   - 이상 거래가 탐지되면 `python-telegram-bot`을 통해 관리자 텔레그램으로 알림을 보내는 모듈 개발.
+   - FastAPI를 띄워 분석 결과를 제공하는 REST API 구현 및 텔레그램 봇 모듈 개발.
 
 ---
 
@@ -142,10 +144,9 @@ real-estate-ml/
 
 **[어떻게 작업하는가?]**
 1. **KoBERT 감성 분석 (`src/models/kobert_sentiment.py`)**:
-   - HuggingFace `transformers`에서 `skt/kobert-base-v1` 모델 로드.
-   - 뉴스 텍스트(제목/본문)를 입력받아 [호재(긍정) / 악재(부정) / 중립]을 확률값으로 출력하는 파인튜닝 스크립트 작성 및 추론 함수 구현.
+   - `skt/kobert-base-v1` 모델을 활용, 실시간으로 수집되는 뉴스 텍스트를 입력받아 [호재/악재/중립]을 스코어링하는 코드 작성.
 2. **XAI 로직 (`src/models/shap_explainer.py`)**:
-   - 승준 팀장이 만든 Autoencoder 결과물을 받아, `shap` 라이브러리를 통해 "어떤 변수(ex: 전기세 급감, 최근 거래가 폭락 등) 때문에 이상 거래로 판정되었는지" 기여도(Feature Importance)를 수치 및 그래프로 뽑아내는 함수 작성.
+   - 팀장이 만든 Autoencoder 결과를 바탕으로, `shap` 라이브러리를 통해 "어떤 변수 때문에 이상 거래로 판정되었는지" (예: 장충금 고갈, 전기세 급감 등) 기여도를 수치화하여 근거 데이터 생성.
 
 ---
 
@@ -156,7 +157,7 @@ real-estate-ml/
 1. **로컬 최신화**: 매일 작업 전 `develop` 브랜치로 이동 후 `git pull origin develop` 실행.
 2. **브랜치 생성**: 본인의 할 일에 맞춰 새 브랜치 생성 (예: `feature/woohyun-kobert`).
 3. **코드 작성 및 테스트**: 담당한 `src/` 하위의 파이썬 파일을 작성하고 로컬에서 테스트.
-4. **Commit & Push**: 작은 단위로 자주 커밋(`feat: 국토부 API 수집 함수 추가` 등)하고 GitHub에 푸시.
+4. **Commit & Push**: 작은 단위로 자주 커밋(`feat: 당월 국토부 API 모듈 추가` 등)하고 GitHub에 푸시.
 5. **Pull Request (PR)**: GitHub 사이트에서 `develop` 브랜치로 PR 생성.
 6. **코드 리뷰 (팀장)**: 문승준 팀장이 코드를 확인한 후 충돌이 없으면 `develop` 브랜치에 병합(Merge).
 
@@ -182,8 +183,8 @@ cp .env.example .env
 ### 2. 코드 실행 예시
 *(추후 코드가 완성됨에 따라 구체적인 실행 명령어가 업데이트 될 예정입니다.)*
 ```bash
-# 데이터 수집 실행
-python -m src.data.molit_api --region 서울 --period 202601
+# 당월 데이터 실시간 수집 실행
+python -m src.data.molit_api --period latest
 
 # API 서버 기동
 uvicorn src.api.main:app --reload
@@ -220,6 +221,6 @@ uvicorn src.api.main:app --reload
 | 역할 | 이름 | 담당 및 연락처 |
 |------|------|------|
 | **지도교수** | 이성철 교수님 | sungchul@sunmoon.ac.kr |
-| **팀 리드** | 문승준 | 설계, ETL(Pandas), Autoencoder (msjoon0811@naver.com) |
-| **팀원** | 손종인 | API 데이터 수집, 군집화, 백엔드 (sonjong9720@gmail.com) |
+| **팀 리드** | 문승준 | 전체 설계, 대용량CSV/n8n ETL, Autoencoder (msjoon0811@naver.com) |
+| **팀원** | 손종인 | 당월 API 데이터 수집, 군집화, 백엔드 (sonjong9720@gmail.com) |
 | **팀원** | 안우현 | KoBERT 모델링, SHAP XAI (0215woo@naver.com) |
