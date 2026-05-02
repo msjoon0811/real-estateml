@@ -9,6 +9,11 @@
 data/raw/
 data/processed/
 data/external/
+data/*.csv
+data/*.xlsx
+data/*.xls
+data/*.json
+data/*.parquet
 
 # ===== Python =====
 __pycache__/
