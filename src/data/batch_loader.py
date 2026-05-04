@@ -38,15 +38,28 @@ def load_molit_csvs() -> pd.DataFrame:
     return _read_csv_folder(RAW_DIR / "molit")
 
 
-def load_kapt_csvs() -> pd.DataFrame:
-    """K-apt 관리비 CSV 전체 로드"""
-    logger.info("=== K-apt CSV 로드 시작 ===")
-    return _read_csv_folder(RAW_DIR / "kapt")
+def load_kapt_excels() -> pd.DataFrame:
+    """K-apt 관리비 엑셀(.xlsx/.xls) 전체 로드"""
+    logger.info("=== K-apt 엑셀 로드 시작 ===")
+    folder = RAW_DIR / "kapt"
+    files  = sorted(list(folder.glob("*.xlsx")) + list(folder.glob("*.xls")))
+    if not files:
+        raise FileNotFoundError(f"{folder} 안에 엑셀 파일(.xlsx/.xls)이 없습니다.")
+
+    dfs = []
+    for f in files:
+        df = pd.read_excel(f, engine="openpyxl")
+        logger.info(f"  로드: {f.name}  ({len(df):,}행)")
+        dfs.append(df)
+
+    combined = pd.concat(dfs, ignore_index=True)
+    logger.info(f"  합계: {len(combined):,}행\n")
+    return combined
 
 
 if __name__ == "__main__":
     molit_df = load_molit_csvs()
-    kapt_df  = load_kapt_csvs()
+    kapt_df  = load_kapt_excels()
 
     print("\n[국토부 컬럼 목록]")
     print(molit_df.columns.tolist())

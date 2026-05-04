@@ -48,11 +48,11 @@ def save_integrated(df: pd.DataFrame, version: str = "v1") -> Path:
 
 
 if __name__ == "__main__":
-    from src.data.batch_loader import load_molit_csvs, load_kapt_csvs
+    from src.data.batch_loader import load_molit_csvs, load_kapt_excels
     from src.features.preprocessor import preprocess_molit, preprocess_kapt
 
     molit_raw   = load_molit_csvs()
-    kapt_raw    = load_kapt_csvs()
+    kapt_raw    = load_kapt_excels()
     molit_clean = preprocess_molit(molit_raw)
     kapt_clean  = preprocess_kapt(kapt_raw)
     integrated  = integrate(molit_clean, kapt_clean)
