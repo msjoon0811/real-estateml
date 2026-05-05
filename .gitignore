@@ -45,7 +45,8 @@ desktop.ini
 *.pth
 *.ckpt
 *.h5
-models/checkpoints/
+*.npy
+/models/
 
 # ===== 로그 =====
 *.log
